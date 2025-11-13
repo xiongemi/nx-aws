@@ -1,4 +1,4 @@
-import { ensureDirSync } from 'fs-extra';
+import { existsSync } from 'node:fs';
 import {
   cleanup,
   patchPackageJsonForPlugin,
@@ -41,7 +41,7 @@ function runPackageManagerInstall(silent: boolean = true) {
  */
 describe('aws-cache e2e', () => {
   beforeAll(() => {
-    ensureDirSync(tmpProjPath());
+    existsSync(tmpProjPath());
     cleanup();
     runNxNewCommand();
     patchPackageJsonForPlugin('@nx-aws-plugin/nx-aws-cache', 'dist/packages/nx-aws-cache');

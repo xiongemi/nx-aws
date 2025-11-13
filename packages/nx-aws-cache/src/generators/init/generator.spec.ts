@@ -1,6 +1,19 @@
 import { createTreeWithEmptyWorkspace } from '@nx/devkit/testing';
 import { Tree, readJson } from '@nx/devkit';
 
+// Mock readJsonFile before importing the generator
+jest.mock('@nx/devkit', () => {
+  const actual = jest.requireActual('@nx/devkit');
+  return {
+    ...actual,
+    readJsonFile: jest.fn(() => ({
+      devDependencies: {
+        nx: '^20.0.0',
+      },
+    })),
+  };
+});
+
 import generator from './generator';
 import { InitGeneratorSchema } from './schema';
 

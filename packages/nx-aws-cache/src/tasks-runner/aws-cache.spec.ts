@@ -151,25 +151,23 @@ describe('Test database file syncing', () => {
     // Use a unique temp file that won't conflict
     const testDbFile = path.join(os.tmpdir(), `test-db-sync-${Date.now()}-${Math.random()}.txt`);
     fs.writeFileSync(testDbFile, 'test database content');
+    
+    const dbStream = sdkStreamMixin(fs.createReadStream(testDbFile));
+    
+    // Mock HeadObjectCommand to indicate file exists
+    s3Mock.on(HeadObjectCommand).resolves({});
+    // Mock GetObjectCommand to return database file
+    s3Mock.on(GetObjectCommand).resolves({ Body: dbStream });
 
-    try {
-      const dbStream = sdkStreamMixin(fs.createReadStream(testDbFile));
+    await awsCache.syncDatabaseFiles(workspaceRoot, workspaceId);
 
-      // Mock HeadObjectCommand to indicate file exists
-      s3Mock.on(HeadObjectCommand).resolves({});
-      // Mock GetObjectCommand to return database file
-      s3Mock.on(GetObjectCommand).resolves({ Body: dbStream });
-
-      await awsCache.syncDatabaseFiles(workspaceRoot, workspaceId);
-
-      // Verify that database file was downloaded (or at least attempted)
-      // Note: The actual file content depends on what we mock
-      expect(s3Mock.calls().length).toBeGreaterThan(0);
-    } finally {
-      // Clean up test file
-      if (fs.existsSync(testDbFile)) {
-        fs.unlinkSync(testDbFile);
-      }
+    // Verify that database file was downloaded (or at least attempted)
+    // Note: The actual file content depends on what we mock
+    expect(s3Mock.calls().length).toBeGreaterThan(0);
+    
+    // Clean up test file after stream is created
+    if (fs.existsSync(testDbFile)) {
+      fs.unlinkSync(testDbFile);
     }
   });
 

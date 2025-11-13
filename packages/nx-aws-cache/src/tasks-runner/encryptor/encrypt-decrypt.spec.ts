@@ -1,6 +1,6 @@
 import { Encrypt } from './encrypt';
-import { randomBytes, createDecipheriv, createCipheriv } from 'crypto';
-import { createReadStream, createWriteStream, readFileSync } from 'fs';
+import { randomBytes, createDecipheriv, createCipheriv } from 'node:crypto';
+import { createReadStream, createWriteStream, readFileSync } from 'node:fs';
 import { Readable, Writable } from 'stream';
 import { Decrypt } from './decrypt';
 import { EncryptConfig } from './encrypt-config';
@@ -13,16 +13,30 @@ class TestCipher {
   // eslint-disable-next-line no-useless-constructor
   constructor(private algorithm: string, private key: Buffer, private iv: Buffer) {}
 
-  encrypt(data: Buffer) {
-    const cipher = createCipheriv(this.algorithm, this.key, this.iv);
-    const encrypted = cipher.update(data);
-    return Buffer.concat([encrypted, cipher.final()]);
+  encrypt(data: Buffer): Buffer {
+    const cipher = createCipheriv(
+      this.algorithm,
+      this.key as unknown as Uint8Array,
+      this.iv as unknown as Uint8Array,
+    );
+    const encrypted = cipher.update(data as unknown as Uint8Array);
+    return Buffer.concat([
+      encrypted as unknown as Buffer,
+      cipher.final() as unknown as Buffer,
+    ]);
   }
 
-  decrypt(encryptedData: Buffer) {
-    const decipher = createDecipheriv(this.algorithm, this.key, this.iv);
-    const decrypted = decipher.update(encryptedData);
-    return Buffer.concat([decrypted, decipher.final()]);
+  decrypt(encryptedData: Buffer): Buffer {
+    const decipher = createDecipheriv(
+      this.algorithm,
+      this.key as unknown as Uint8Array,
+      this.iv as unknown as Uint8Array,
+    );
+    const decrypted = decipher.update(encryptedData as unknown as ArrayBufferView);
+    return Buffer.concat([
+      decrypted as unknown as Buffer,
+      decipher.final() as unknown as Buffer,
+    ]);
   }
 }
 
@@ -61,9 +75,9 @@ describe('Encryptor tests', () => {
       const encryptedData = readFileSync('/tmp/enc.test');
       const ivFromFirstBytes = encryptedData.slice(0, ivLength);
       const encryptedPayload = encryptedData.slice(ivLength, encryptedData.length);
-      expect(ivFromFirstBytes.equals(iv)).toBeTruthy();
-      expect(testCipher.encrypt(testData).equals(encryptedData));
-      expect(testCipher.decrypt(encryptedPayload).equals(testData));
+      expect(ivFromFirstBytes.equals(iv as unknown as Buffer)).toBeTruthy();
+      expect(testCipher.encrypt(testData).equals(encryptedData as unknown as Buffer)).toBeTruthy();
+      expect(testCipher.decrypt(encryptedPayload).equals(testData as unknown as Buffer)).toBeTruthy();
       done();
     });
   });
@@ -86,8 +100,8 @@ describe('Encryptor tests', () => {
       const fileInput = createReadStream(filePath);
       fileInput.pipe(decrypt).pipe(writable);
       writable.on('finish', () => {
-        const decrypted = Buffer.concat(chunks);
-        expect(decrypted.equals(testData)).toBeTruthy();
+        const decrypted = Buffer.concat(chunks as unknown as Buffer[]);
+        expect(decrypted.equals(testData as unknown as Buffer)).toBeTruthy();
         done();
       });
     });

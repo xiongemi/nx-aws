@@ -24,7 +24,11 @@ export class Encrypt extends Transform {
       const iv = this.generateIv();
       this.readFirstChunk = true;
 
-      this.cipher = createCipheriv(this.config.getAlgorithm(), this.config.getKeyBuffer(), iv);
+      this.cipher = createCipheriv(
+        this.config.getAlgorithm(),
+        this.config.getKeyBuffer() as unknown as Uint8Array,
+        iv as unknown as Uint8Array,
+      );
       // As first push iv
       this.push(iv, encoding);
       const encrypted = this.cipher.update(chunk);
