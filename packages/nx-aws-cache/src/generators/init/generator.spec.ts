@@ -4,6 +4,22 @@ import { Tree, readJson } from '@nx/devkit';
 import generator from './generator';
 import { InitGeneratorSchema } from './schema';
 
+function findPluginInNxJson(nxJson: { plugins?: Array<unknown> }): unknown {
+  if (!nxJson.plugins || !Array.isArray(nxJson.plugins)) {
+    return null;
+  }
+  return (
+    nxJson.plugins.find(
+      (pluginConfig: unknown) =>
+        typeof pluginConfig === 'object' &&
+        pluginConfig !== null &&
+        'plugin' in pluginConfig &&
+        (pluginConfig as { plugin: string }).plugin === '@nx-aws-plugin/nx-aws-cache',
+    ) || null
+  );
+}
+
+// eslint-disable-next-line max-lines-per-function
 describe('init generator', () => {
   let appTree: Tree;
   const options: InitGeneratorSchema = {
@@ -30,13 +46,7 @@ describe('init generator', () => {
     expect(nxJson.plugins).toBeDefined();
     expect(Array.isArray(nxJson.plugins)).toBe(true);
 
-    const plugin = (nxJson.plugins as Array<unknown>).find(
-      (p: unknown) =>
-        typeof p === 'object' &&
-        p !== null &&
-        'plugin' in p &&
-        (p as { plugin: string }).plugin === '@nx-aws-plugin/nx-aws-cache',
-    );
+    const plugin = findPluginInNxJson(nxJson);
 
     expect(plugin).toBeDefined();
     expect(plugin).toMatchObject({
@@ -68,13 +78,7 @@ describe('init generator', () => {
     expect(nxJson.plugins).toBeDefined();
     expect(Array.isArray(nxJson.plugins)).toBe(true);
 
-    const plugin = (nxJson.plugins as Array<unknown>).find(
-      (p: unknown) =>
-        typeof p === 'object' &&
-        p !== null &&
-        'plugin' in p &&
-        (p as { plugin: string }).plugin === '@nx-aws-plugin/nx-aws-cache',
-    );
+    const plugin = findPluginInNxJson(nxJson);
 
     expect(plugin).toBeDefined();
     expect(plugin).toMatchObject({

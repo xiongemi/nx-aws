@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { createReadStream, createWriteStream, writeFile, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { pipeline, Readable } from 'stream';
@@ -165,7 +166,11 @@ export class AwsCache implements RemoteCache {
         [hash],
       );
     } catch (err) {
-      throw new Error(`Error creating tar.gz file - ${err}`);
+      const error = new Error(`Error creating tar.gz file - ${err}`);
+      if (err instanceof Error && 'cause' in Error.prototype) {
+        (error as Error & { cause?: Error }).cause = err;
+      }
+      throw error;
     }
   }
 
@@ -177,7 +182,11 @@ export class AwsCache implements RemoteCache {
         filter: (path: string) => this.filterTgzContent(path),
       });
     } catch (err) {
-      throw new Error(`Error extracting tar.gz file - ${err}`);
+      const error = new Error(`Error extracting tar.gz file - ${err}`);
+      if (err instanceof Error && 'cause' in Error.prototype) {
+        (error as Error & { cause?: Error }).cause = err;
+      }
+      throw error;
     }
   }
 
@@ -213,7 +222,11 @@ export class AwsCache implements RemoteCache {
 
       return response;
     } catch (err) {
-      throw new Error(`Storage Cache: Upload error - ${err}`);
+      const error = new Error(`Storage Cache: Upload error - ${err}`);
+      if (err instanceof Error && 'cause' in Error.prototype) {
+        (error as Error & { cause?: Error }).cause = err;
+      }
+      throw error;
     }
   }
 
@@ -235,7 +248,11 @@ export class AwsCache implements RemoteCache {
         await pipelinePromise(fileStream, writeFileToLocalDir);
       }
     } catch (err) {
-      throw new Error(`Storage Cache: Download error - ${err}`);
+      const error = new Error(`Storage Cache: Download error - ${err}`);
+      if (err instanceof Error && 'cause' in Error.prototype) {
+        (error as Error & { cause?: Error }).cause = err;
+      }
+      throw error;
     }
   }
 
@@ -256,7 +273,11 @@ export class AwsCache implements RemoteCache {
         return false;
       }
 
-      throw new Error(`Error checking cache file existence - ${err}`);
+      const error = new Error(`Error checking cache file existence - ${err}`);
+      if (err instanceof Error && 'cause' in Error.prototype) {
+        (error as Error & { cause?: Error }).cause = err;
+      }
+      throw error;
     }
   }
 
@@ -303,6 +324,46 @@ export class AwsCache implements RemoteCache {
     this.workspaceId = workspaceId;
   }
 
+  private async downloadDatabaseFile(
+    dbFileName: string,
+    s3Key: string,
+    localFilePath: string,
+  ): Promise<boolean> {
+    try {
+      const headParams = new clientS3.HeadObjectCommand({
+        Bucket: this.bucket,
+        Key: s3Key,
+      });
+      await this.s3.send(headParams);
+
+      this.logger.debug(`Storage Cache: Downloading database file ${dbFileName}`);
+      const getParams = new clientS3.GetObjectCommand({
+        Bucket: this.bucket,
+        Key: s3Key,
+      });
+
+      const commandOutput = await this.s3.send(getParams);
+      const fileStream = commandOutput.Body as Readable;
+      const writeStream = createWriteStream(localFilePath);
+      const pipelinePromise = promisify(pipeline);
+
+      if (this.encryptConfig) {
+        await pipelinePromise(fileStream, new Decrypt(this.encryptConfig), writeStream);
+      } else {
+        await pipelinePromise(fileStream, writeStream);
+      }
+
+      this.logger.debug(`Storage Cache: Downloaded database file ${dbFileName}`);
+      return true;
+    } catch (err) {
+      if ((err as Error).name === 'NotFound') {
+        this.logger.debug(`Storage Cache: Database file ${dbFileName} not found in S3, skipping`);
+        return false;
+      }
+      throw err;
+    }
+  }
+
   /**
    * Syncs database files from S3 to local workspace-data directory.
    * This is required for Nx 20+ database-driven cache to work.
@@ -314,71 +375,49 @@ export class AwsCache implements RemoteCache {
   public async syncDatabaseFiles(workspaceRoot: string, workspaceId: string): Promise<void> {
     try {
       const workspaceDataPath = getWorkspaceDataPath(workspaceRoot);
-
-      // Ensure workspace-data directory exists
       if (!existsSync(workspaceDataPath)) {
         mkdirSync(workspaceDataPath, { recursive: true });
       }
 
-      // Database files to sync: .db, .db-wal, .db-shm
       const dbFileExtensions = ['.db', '.db-wal', '.db-shm'];
-
-      for (const ext of dbFileExtensions) {
+      const syncPromises = dbFileExtensions.map(async (ext) => {
         const dbFileName = `${workspaceId}${ext}`;
         const s3Key = this.getDatabaseS3Key(dbFileName);
         const localFilePath = join(workspaceDataPath, dbFileName);
 
         try {
-          // Check if file exists in S3
-          const headParams = new clientS3.HeadObjectCommand({
-            Bucket: this.bucket,
-            Key: s3Key,
-          });
-
-          try {
-            await this.s3.send(headParams);
-
-            // File exists, download it
-            this.logger.debug(`Storage Cache: Downloading database file ${dbFileName}`);
-
-            const getParams = new clientS3.GetObjectCommand({
-              Bucket: this.bucket,
-              Key: s3Key,
-            });
-
-            const commandOutput = await this.s3.send(getParams);
-            const fileStream = commandOutput.Body as Readable;
-            const writeStream = createWriteStream(localFilePath);
-
-            if (this.encryptConfig) {
-              const pipelinePromise = promisify(pipeline);
-              await pipelinePromise(fileStream, new Decrypt(this.encryptConfig), writeStream);
-            } else {
-              const pipelinePromise = promisify(pipeline);
-              await pipelinePromise(fileStream, writeStream);
-            }
-
-            this.logger.debug(`Storage Cache: Downloaded database file ${dbFileName}`);
-          } catch (err) {
-            // File doesn't exist in S3, skip it (this is normal for .db-wal and .db-shm)
-            if ((err as Error).name === 'NotFound') {
-              this.logger.debug(
-                `Storage Cache: Database file ${dbFileName} not found in S3, skipping`,
-              );
-              continue;
-            }
-            throw err;
-          }
+          await this.downloadDatabaseFile(dbFileName, s3Key, localFilePath);
         } catch (err) {
           this.logger.debug(`Storage Cache: Error syncing database file ${dbFileName}: ${err}`);
-          // Don't throw - allow cache to work even if database sync fails
-          // The database will be created/updated locally by Nx
         }
-      }
+      });
+
+      await Promise.all(syncPromises);
     } catch (err) {
       this.logger.debug(`Storage Cache: Error syncing database files: ${err}`);
-      // Don't throw - allow cache to work even if database sync fails
     }
+  }
+
+  private async uploadSingleDatabaseFile(
+    dbFileName: string,
+    localFilePath: string,
+    s3Key: string,
+  ): Promise<void> {
+    this.logger.debug(`Storage Cache: Uploading database file ${dbFileName}`);
+    const fileStream = createReadStream(localFilePath);
+    const upload = new Upload({
+      client: this.s3,
+      params: {
+        Bucket: this.bucket,
+        Key: s3Key,
+        Body: this.encryptConfig
+          ? fileStream.pipe(new Encrypt(this.encryptConfig))
+          : fileStream,
+      },
+    });
+
+    await upload.done();
+    this.logger.debug(`Storage Cache: Uploaded database file ${dbFileName}`);
   }
 
   /**
@@ -401,7 +440,6 @@ export class AwsCache implements RemoteCache {
     }
     try {
       const workspaceDataPath = getWorkspaceDataPath(root);
-
       if (!existsSync(workspaceDataPath)) {
         this.logger.debug(
           `Storage Cache: Workspace data directory not found, skipping database upload`,
@@ -409,45 +447,24 @@ export class AwsCache implements RemoteCache {
         return;
       }
 
-      // Database files to upload: .db, .db-wal, .db-shm
       const dbFileExtensions = ['.db', '.db-wal', '.db-shm'];
-
-      for (const ext of dbFileExtensions) {
-        const dbFileName = `${id}${ext}`;
-        const localFilePath = join(workspaceDataPath, dbFileName);
-
-        if (!existsSync(localFilePath)) {
-          // File doesn't exist locally, skip it
-          continue;
-        }
-
-        try {
-          this.logger.debug(`Storage Cache: Uploading database file ${dbFileName}`);
-
-          const fileStream = createReadStream(localFilePath);
+      const uploadPromises = dbFileExtensions
+        .map((ext) => {
+          const dbFileName = `${id}${ext}`;
+          const localFilePath = join(workspaceDataPath, dbFileName);
+          if (!existsSync(localFilePath)) {
+            return null;
+          }
           const s3Key = this.getDatabaseS3Key(dbFileName);
-
-          const upload = new Upload({
-            client: this.s3,
-            params: {
-              Bucket: this.bucket,
-              Key: s3Key,
-              Body: this.encryptConfig
-                ? fileStream.pipe(new Encrypt(this.encryptConfig))
-                : fileStream,
-            },
+          return this.uploadSingleDatabaseFile(dbFileName, localFilePath, s3Key).catch((err) => {
+            this.logger.debug(`Storage Cache: Error uploading database file ${dbFileName}: ${err}`);
           });
+        })
+        .filter((promise): promise is Promise<void> => promise !== null);
 
-          await upload.done();
-          this.logger.debug(`Storage Cache: Uploaded database file ${dbFileName}`);
-        } catch (err) {
-          this.logger.debug(`Storage Cache: Error uploading database file ${dbFileName}: ${err}`);
-          // Don't throw - continue with other files
-        }
-      }
+      await Promise.all(uploadPromises);
     } catch (err) {
       this.logger.debug(`Storage Cache: Error uploading database files: ${err}`);
-      // Don't throw - allow cache to work even if database upload fails
     }
   }
 

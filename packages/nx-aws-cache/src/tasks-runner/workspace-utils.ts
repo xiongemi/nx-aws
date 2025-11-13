@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { workspaceRoot } from '@nx/devkit';
+import { workspaceRoot as nxWorkspaceRoot } from '@nx/devkit';
 
 /**
  * Gets the workspace ID for the current Nx workspace.
@@ -10,7 +10,7 @@ import { workspaceRoot } from '@nx/devkit';
  * @returns The workspace ID string
  * @throws Error if workspace ID cannot be determined
  */
-export function getWorkspaceId(workspaceRootPath: string = workspaceRoot): string {
+export function getWorkspaceId(workspaceRootPath: string = nxWorkspaceRoot): string {
   const workspaceDataPath = join(workspaceRootPath, '.nx', 'workspace-data');
 
   if (!existsSync(workspaceDataPath)) {
@@ -33,11 +33,12 @@ export function getWorkspaceId(workspaceRootPath: string = workspaceRoot): strin
     // We can derive a workspace ID from the workspace root path hash or use a default
     // For now, we'll use a hash of the workspace root path
     const crypto = require('crypto');
+    const hashLength = 16;
     const hash = crypto
       .createHash('sha256')
       .update(workspaceRootPath)
       .digest('hex')
-      .substring(0, 16);
+      .substring(0, hashLength);
     return hash;
   }
 
@@ -49,7 +50,7 @@ export function getWorkspaceId(workspaceRootPath: string = workspaceRoot): strin
       return { file, mtime: stats.mtime.getTime() };
     });
 
-    dbFilesWithStats.sort((a, b) => b.mtime - a.mtime);
+    dbFilesWithStats.sort((fileA, fileB) => fileB.mtime - fileA.mtime);
     const workspaceId = dbFilesWithStats[0].file.replace('.db', '');
     return workspaceId;
   }
@@ -65,6 +66,6 @@ export function getWorkspaceId(workspaceRootPath: string = workspaceRoot): strin
  * @param workspaceRootPath - The root path of the workspace
  * @returns The path to .nx/workspace-data/
  */
-export function getWorkspaceDataPath(workspaceRootPath: string = workspaceRoot): string {
+export function getWorkspaceDataPath(workspaceRootPath: string | undefined = nxWorkspaceRoot): string {
   return join(workspaceRootPath, '.nx', 'workspace-data');
 }

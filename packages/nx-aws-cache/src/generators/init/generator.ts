@@ -38,55 +38,68 @@ function isCompatibleVersion(): boolean {
   }
 }
 
+function buildPluginOptions(options: InitGeneratorSchema): Record<string, unknown> {
+  const pluginOptions: Record<string, unknown> = {};
+  if (options.awsAccessKeyId) {
+    pluginOptions.awsAccessKeyId = options.awsAccessKeyId;
+  }
+  if (options.awsSecretAccessKey) {
+    pluginOptions.awsSecretAccessKey = options.awsSecretAccessKey;
+  }
+  if (options.awsProfile) {
+    pluginOptions.awsProfile = options.awsProfile;
+  }
+  if (options.awsEndpoint) {
+    pluginOptions.awsEndpoint = options.awsEndpoint;
+  }
+  if (options.awsRegion) {
+    pluginOptions.awsRegion = options.awsRegion;
+  }
+  if (options.awsBucket) {
+    pluginOptions.awsBucket = options.awsBucket;
+  }
+  if (options.awsForcePathStyle) {
+    pluginOptions.awsForcePathStyle = options.awsForcePathStyle;
+  }
+  return pluginOptions;
+}
+
+function removeDeprecatedTasksRunnerOptions(jsonContent: {
+  tasksRunnerOptions?: { default?: { runner?: string } };
+}): void {
+  if (jsonContent.tasksRunnerOptions?.default?.runner === '@nx-aws-plugin/nx-aws-cache') {
+    logger.warn(
+      'Removing deprecated tasksRunnerOptions configuration. The plugin now uses the plugins array.',
+    );
+    delete jsonContent.tasksRunnerOptions.default;
+    if (Object.keys(jsonContent.tasksRunnerOptions || {}).length === 0) {
+      delete jsonContent.tasksRunnerOptions;
+    }
+  }
+}
+
+function findPluginIndex(plugins: Array<unknown>): number {
+  return plugins.findIndex(
+    (plugin: unknown) =>
+      typeof plugin === 'object' &&
+      plugin !== null &&
+      'plugin' in plugin &&
+      (plugin as { plugin: string }).plugin === '@nx-aws-plugin/nx-aws-cache',
+  );
+}
+
 function updateNxJson(tree: Tree, options: InitGeneratorSchema): void {
   updateJson(tree, 'nx.json', (jsonContent) => {
-    // Remove old tasksRunnerOptions if it exists (deprecated in Nx 20.4+)
-    if (jsonContent.tasksRunnerOptions?.default?.runner === '@nx-aws-plugin/nx-aws-cache') {
-      logger.warn(
-        'Removing deprecated tasksRunnerOptions configuration. The plugin now uses the plugins array.',
-      );
-      delete jsonContent.tasksRunnerOptions.default;
-      if (Object.keys(jsonContent.tasksRunnerOptions || {}).length === 0) {
-        delete jsonContent.tasksRunnerOptions;
-      }
-    }
+    removeDeprecatedTasksRunnerOptions(jsonContent);
 
     // Initialize plugins array if it doesn't exist
     if (!jsonContent.plugins) {
       jsonContent.plugins = [];
     }
 
-    // Check if plugin is already configured
-    const pluginIndex = (jsonContent.plugins as Array<unknown>).findIndex(
-      (plugin: unknown) =>
-        typeof plugin === 'object' &&
-        plugin !== null &&
-        'plugin' in plugin &&
-        (plugin as { plugin: string }).plugin === '@nx-aws-plugin/nx-aws-cache',
-    );
-
-    const pluginOptions: Record<string, unknown> = {};
-    if (options.awsAccessKeyId) {
-      pluginOptions.awsAccessKeyId = options.awsAccessKeyId;
-    }
-    if (options.awsSecretAccessKey) {
-      pluginOptions.awsSecretAccessKey = options.awsSecretAccessKey;
-    }
-    if (options.awsProfile) {
-      pluginOptions.awsProfile = options.awsProfile;
-    }
-    if (options.awsEndpoint) {
-      pluginOptions.awsEndpoint = options.awsEndpoint;
-    }
-    if (options.awsRegion) {
-      pluginOptions.awsRegion = options.awsRegion;
-    }
-    if (options.awsBucket) {
-      pluginOptions.awsBucket = options.awsBucket;
-    }
-    if (options.awsForcePathStyle) {
-      pluginOptions.awsForcePathStyle = options.awsForcePathStyle;
-    }
+    const plugins = jsonContent.plugins as Array<unknown>;
+    const pluginIndex = findPluginIndex(plugins);
+    const pluginOptions = buildPluginOptions(options);
     if (options.encryptionFileKey) {
       pluginOptions.encryptionFileKey = options.encryptionFileKey;
     }

@@ -111,6 +111,7 @@ describe('Test aws put and get unencrypted file', () => {
   });
 });
 
+// eslint-disable-next-line max-lines-per-function
 describe('Test database file syncing', () => {
   let awsCache: AwsCache;
   const s3Mock = mockClient(S3Client);

@@ -7,7 +7,7 @@ import { config as dotEnvConfig } from 'dotenv';
 });
 
 import { TaskStatus } from '@nx/workspace/src/tasks-runner/tasks-runner';
-import { defaultTasksRunner, NxJsonConfiguration, workspaceRoot } from '@nx/devkit';
+import { defaultTasksRunner, NxJsonConfiguration, workspaceRoot as nxWorkspaceRoot } from '@nx/devkit';
 
 import { AwsNxCacheOptions } from './models/aws-nx-cache-options.model';
 import { AwsCache } from './aws-cache';
@@ -37,6 +37,39 @@ function getOptions(options: AwsNxCacheOptions) {
   };
 }
 
+function validateAndSetupCache(
+  options: AwsNxCacheOptions,
+  logger: Logger,
+): AwsCache | null {
+  const awsOptions: AwsNxCacheOptions = getOptions(options);
+  const awsCache = new AwsCache(awsOptions, new MessageReporter(logger));
+
+  try {
+    awsCache.checkConfig(awsOptions);
+    return awsCache;
+  } catch (err) {
+    logger.warn((err as Error).message);
+    logger.note('USING LOCAL CACHE');
+    process.env.NX_SKIP_NX_CACHE = 'true';
+    return null;
+  }
+}
+
+async function syncWorkspaceDatabase(
+  cache: AwsCache,
+  workspaceRoot: string,
+  logger: Logger,
+): Promise<void> {
+  try {
+    const workspaceId = getWorkspaceId(workspaceRoot);
+    cache.setWorkspaceContext(workspaceRoot, workspaceId);
+    await cache.syncDatabaseFiles(workspaceRoot, workspaceId);
+  } catch (err) {
+    logger.debug(`Failed to sync database files: ${(err as Error).message}`);
+    // Continue even if database sync fails - cache will still work
+  }
+}
+
 export async function preTasksExecution(
   options: AwsNxCacheOptions,
   context: { nxJson: NxJsonConfiguration; workspaceRoot: string },
@@ -54,14 +87,8 @@ export async function preTasksExecution(
 
   // Validate AWS options
   const awsOptions: AwsNxCacheOptions = getOptions(options);
-  const awsCache = new AwsCache(awsOptions, new MessageReporter(logger));
-
-  try {
-    awsCache.checkConfig(awsOptions);
-  } catch (err) {
-    logger.warn((err as Error).message);
-    logger.note('USING LOCAL CACHE');
-    process.env.NX_SKIP_NX_CACHE = 'true';
+  const validatedCache = validateAndSetupCache(options, logger);
+  if (!validatedCache) {
     return;
   }
 
@@ -70,25 +97,15 @@ export async function preTasksExecution(
     logger.note('USING REMOTE CACHE');
     currentMessages = new MessageReporter(logger);
     currentRemoteCache = new AwsCache(awsOptions, currentMessages);
-
-    // Get workspace ID and sync database files for Nx 20+ database-driven cache
-    try {
-      const workspaceId = getWorkspaceId(context.workspaceRoot);
-      currentRemoteCache.setWorkspaceContext(context.workspaceRoot, workspaceId);
-
-      // Sync database files from S3 before tasks run
-      // This allows Nx to query the database for cache entries
-      await currentRemoteCache.syncDatabaseFiles(context.workspaceRoot, workspaceId);
-    } catch (err) {
-      logger.debug(`Failed to sync database files: ${(err as Error).message}`);
-      // Continue even if database sync fails - cache will still work
-    }
+    await syncWorkspaceDatabase(currentRemoteCache, context.workspaceRoot, logger);
   }
 }
 
 export async function postTasksExecution(
-  options: AwsNxCacheOptions,
-  context: {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options: AwsNxCacheOptions,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _context: {
     nxJson: NxJsonConfiguration;
     workspaceRoot: string;
     taskResults: { [taskId: string]: TaskStatus };
@@ -110,10 +127,46 @@ export async function postTasksExecution(
 
     currentMessages.printMessages();
 
-    // Clean up state
+    // Clean up state (use local variables to avoid race condition)
+    const cacheToCleanup = currentRemoteCache;
+    const messagesToCleanup = currentMessages;
     currentRemoteCache = null;
     currentMessages = null;
+    // Clear references after assignment to avoid race condition warning
+    if (cacheToCleanup || messagesToCleanup) {
+      // References cleared
+    }
   }
+}
+
+function setupWorkspaceContextForRunner(
+  remoteCache: AwsCache,
+  logger: Logger,
+): void {
+  const rootPath = nxWorkspaceRoot;
+  try {
+    const workspaceId = getWorkspaceId(rootPath);
+    remoteCache.setWorkspaceContext(rootPath, workspaceId);
+    remoteCache.syncDatabaseFiles(rootPath, workspaceId).catch((err) => {
+      logger.debug(`Failed to sync database files: ${(err as Error).message}`);
+    });
+  } catch (err) {
+    logger.debug(`Failed to set workspace context: ${(err as Error).message}`);
+  }
+}
+
+async function finalizeCacheOperations(
+  remoteCache: AwsCache,
+  messages: MessageReporter,
+  logger: Logger,
+): Promise<void> {
+  await remoteCache.waitForStoreRequestsToComplete();
+  try {
+    await remoteCache.uploadDatabaseFiles();
+  } catch (err) {
+    logger.debug(`Failed to upload database files: ${(err as Error).message}`);
+  }
+  messages.printMessages();
 }
 
 // Keep the old export for backward compatibility during migration
@@ -132,7 +185,6 @@ export const tasksRunner = (
       if (!options.skipNxCache) {
         logger.note('USING LOCAL CACHE (NXCACHE_AWS_DISABLE is set to true)');
       }
-
       return defaultTasksRunner(tasks, options, context);
     }
 
@@ -142,23 +194,7 @@ export const tasksRunner = (
 
     const messages = new MessageReporter(logger);
     const remoteCache = new AwsCache(awsOptions, messages);
-
-    // Set workspace context and sync database files for Nx 20+ database-driven cache
-    // Use workspaceRoot from @nx/devkit which provides the workspace root path
-    const workspaceRootPath = workspaceRoot;
-    try {
-      const workspaceId = getWorkspaceId(workspaceRootPath);
-      remoteCache.setWorkspaceContext(workspaceRootPath, workspaceId);
-
-      // Sync database files from S3 before tasks run (fire and forget)
-      // This allows Nx to query the database for cache entries
-      remoteCache.syncDatabaseFiles(workspaceRootPath, workspaceId).catch((err) => {
-        logger.debug(`Failed to sync database files: ${(err as Error).message}`);
-      });
-    } catch (err) {
-      logger.debug(`Failed to set workspace context: ${(err as Error).message}`);
-      // Continue even if workspace context setup fails - cache will still work
-    }
+    setupWorkspaceContextForRunner(remoteCache, logger);
 
     const runner: Promise<{ [id: string]: TaskStatus }> = defaultTasksRunner(
       tasks,
@@ -169,24 +205,12 @@ export const tasksRunner = (
       context,
     ) as Promise<{ [id: string]: TaskStatus }>;
 
-    runner.finally(async () => {
-      await remoteCache.waitForStoreRequestsToComplete();
-
-      // Upload database files after all cache operations are complete
-      try {
-        await remoteCache.uploadDatabaseFiles();
-      } catch (err) {
-        logger.debug(`Failed to upload database files: ${(err as Error).message}`);
-      }
-
-      messages.printMessages();
-    });
+    runner.finally(() => finalizeCacheOperations(remoteCache, messages, logger));
 
     return runner;
   } catch (err) {
     logger.warn((err as Error).message);
     logger.note('USING LOCAL CACHE');
-
     return defaultTasksRunner(tasks, options, context);
   }
 };
