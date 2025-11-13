@@ -6,8 +6,8 @@ function isCompatibleVersion(): boolean {
   try {
     const packageJson = readJsonFile('package.json');
     let version =
-      packageJson.dependencies?.['nx'] ??
-      packageJson.devDependencies?.['nx'] ??
+      packageJson.dependencies?.nx ??
+      packageJson.devDependencies?.nx ??
       packageJson.dependencies?.['@nx/workspace'] ??
       packageJson.devDependencies?.['@nx/workspace'] ??
       packageJson.dependencies?.['@nrwl/workspace'] ??

@@ -1,4 +1,4 @@
-import { createReadStream, createWriteStream, writeFile } from 'fs';
+import { createReadStream, createWriteStream, writeFile, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { pipeline, Readable } from 'stream';
 import { promisify } from 'util';
@@ -12,6 +12,7 @@ import { Logger } from './logger';
 import { MessageReporter } from './message-reporter';
 import { Encrypt, Decrypt, EncryptConfig } from './encryptor';
 import { Upload } from '@aws-sdk/lib-storage';
+import { getWorkspaceDataPath } from './workspace-utils';
 
 export class AwsCache implements RemoteCache {
   private readonly bucket: string;
@@ -20,6 +21,8 @@ export class AwsCache implements RemoteCache {
   private readonly logger = new Logger();
   private readonly uploadQueue: Array<Promise<boolean>> = [];
   private readonly encryptConfig: EncryptConfig | undefined;
+  private workspaceRoot: string | null = null;
+  private workspaceId: string | null = null;
 
   public constructor(options: AwsNxCacheOptions, private messages: MessageReporter) {
     const awsBucket = options.awsBucket ?? '';
@@ -179,8 +182,8 @@ export class AwsCache implements RemoteCache {
   }
 
   private getS3Key(tgzFileName: string) {
-    const fullPath = join(this.path, tgzFileName);
-    return fullPath.replace(/\\/gu, '/');
+    // Use cache-specific S3 key method for consistency
+    return this.getCacheS3Key(tgzFileName);
   }
 
   /**
@@ -287,5 +290,186 @@ export class AwsCache implements RemoteCache {
     ];
 
     return !excludedPaths.includes(filePath);
+  }
+
+  /**
+   * Sets the workspace context for database file syncing
+   *
+   * @param workspaceRoot - The root path of the workspace
+   * @param workspaceId - The workspace ID
+   */
+  public setWorkspaceContext(workspaceRoot: string, workspaceId: string): void {
+    this.workspaceRoot = workspaceRoot;
+    this.workspaceId = workspaceId;
+  }
+
+  /**
+   * Syncs database files from S3 to local workspace-data directory.
+   * This is required for Nx 20+ database-driven cache to work.
+   * Database must be synced before retrieve() is called so Nx can query it.
+   *
+   * @param workspaceRoot - The root path of the workspace
+   * @param workspaceId - The workspace ID
+   */
+  public async syncDatabaseFiles(workspaceRoot: string, workspaceId: string): Promise<void> {
+    try {
+      const workspaceDataPath = getWorkspaceDataPath(workspaceRoot);
+
+      // Ensure workspace-data directory exists
+      if (!existsSync(workspaceDataPath)) {
+        mkdirSync(workspaceDataPath, { recursive: true });
+      }
+
+      // Database files to sync: .db, .db-wal, .db-shm
+      const dbFileExtensions = ['.db', '.db-wal', '.db-shm'];
+
+      for (const ext of dbFileExtensions) {
+        const dbFileName = `${workspaceId}${ext}`;
+        const s3Key = this.getDatabaseS3Key(dbFileName);
+        const localFilePath = join(workspaceDataPath, dbFileName);
+
+        try {
+          // Check if file exists in S3
+          const headParams = new clientS3.HeadObjectCommand({
+            Bucket: this.bucket,
+            Key: s3Key,
+          });
+
+          try {
+            await this.s3.send(headParams);
+
+            // File exists, download it
+            this.logger.debug(`Storage Cache: Downloading database file ${dbFileName}`);
+
+            const getParams = new clientS3.GetObjectCommand({
+              Bucket: this.bucket,
+              Key: s3Key,
+            });
+
+            const commandOutput = await this.s3.send(getParams);
+            const fileStream = commandOutput.Body as Readable;
+            const writeStream = createWriteStream(localFilePath);
+
+            if (this.encryptConfig) {
+              const pipelinePromise = promisify(pipeline);
+              await pipelinePromise(fileStream, new Decrypt(this.encryptConfig), writeStream);
+            } else {
+              const pipelinePromise = promisify(pipeline);
+              await pipelinePromise(fileStream, writeStream);
+            }
+
+            this.logger.debug(`Storage Cache: Downloaded database file ${dbFileName}`);
+          } catch (err) {
+            // File doesn't exist in S3, skip it (this is normal for .db-wal and .db-shm)
+            if ((err as Error).name === 'NotFound') {
+              this.logger.debug(
+                `Storage Cache: Database file ${dbFileName} not found in S3, skipping`,
+              );
+              continue;
+            }
+            throw err;
+          }
+        } catch (err) {
+          this.logger.debug(`Storage Cache: Error syncing database file ${dbFileName}: ${err}`);
+          // Don't throw - allow cache to work even if database sync fails
+          // The database will be created/updated locally by Nx
+        }
+      }
+    } catch (err) {
+      this.logger.debug(`Storage Cache: Error syncing database files: ${err}`);
+      // Don't throw - allow cache to work even if database sync fails
+    }
+  }
+
+  /**
+   * Uploads database files from local workspace-data directory to S3.
+   * This is required for Nx 20+ database-driven cache to work.
+   * Should be called after all cache operations are complete.
+   *
+   * @param workspaceRoot - The root path of the workspace (optional if setWorkspaceContext was called)
+   * @param workspaceId - The workspace ID (optional if setWorkspaceContext was called)
+   */
+  public async uploadDatabaseFiles(workspaceRoot?: string, workspaceId?: string): Promise<void> {
+    const root = workspaceRoot ?? this.workspaceRoot;
+    const id = workspaceId ?? this.workspaceId;
+
+    if (!root || !id) {
+      this.logger.debug(
+        'Storage Cache: Workspace context not set, skipping database upload. Call setWorkspaceContext() first.',
+      );
+      return;
+    }
+    try {
+      const workspaceDataPath = getWorkspaceDataPath(root);
+
+      if (!existsSync(workspaceDataPath)) {
+        this.logger.debug(
+          `Storage Cache: Workspace data directory not found, skipping database upload`,
+        );
+        return;
+      }
+
+      // Database files to upload: .db, .db-wal, .db-shm
+      const dbFileExtensions = ['.db', '.db-wal', '.db-shm'];
+
+      for (const ext of dbFileExtensions) {
+        const dbFileName = `${id}${ext}`;
+        const localFilePath = join(workspaceDataPath, dbFileName);
+
+        if (!existsSync(localFilePath)) {
+          // File doesn't exist locally, skip it
+          continue;
+        }
+
+        try {
+          this.logger.debug(`Storage Cache: Uploading database file ${dbFileName}`);
+
+          const fileStream = createReadStream(localFilePath);
+          const s3Key = this.getDatabaseS3Key(dbFileName);
+
+          const upload = new Upload({
+            client: this.s3,
+            params: {
+              Bucket: this.bucket,
+              Key: s3Key,
+              Body: this.encryptConfig
+                ? fileStream.pipe(new Encrypt(this.encryptConfig))
+                : fileStream,
+            },
+          });
+
+          await upload.done();
+          this.logger.debug(`Storage Cache: Uploaded database file ${dbFileName}`);
+        } catch (err) {
+          this.logger.debug(`Storage Cache: Error uploading database file ${dbFileName}: ${err}`);
+          // Don't throw - continue with other files
+        }
+      }
+    } catch (err) {
+      this.logger.debug(`Storage Cache: Error uploading database files: ${err}`);
+      // Don't throw - allow cache to work even if database upload fails
+    }
+  }
+
+  /**
+   * Gets the S3 key for a database file
+   *
+   * @param dbFileName - The database file name (e.g., workspace-id.db)
+   * @returns The S3 key path
+   */
+  private getDatabaseS3Key(dbFileName: string): string {
+    const fullPath = join(this.path, 'workspace-data', dbFileName);
+    return fullPath.replace(/\\/gu, '/');
+  }
+
+  /**
+   * Gets the S3 key for a cache file (existing method, updated for clarity)
+   *
+   * @param tgzFileName - The cache file name (e.g., hash.tar.gz)
+   * @returns The S3 key path
+   */
+  private getCacheS3Key(tgzFileName: string): string {
+    const fullPath = join(this.path, 'cache', tgzFileName);
+    return fullPath.replace(/\\/gu, '/');
   }
 }

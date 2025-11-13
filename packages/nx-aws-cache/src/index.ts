@@ -27,4 +27,4 @@
 export { preTasksExecution, postTasksExecution } from './tasks-runner/runner';
 
 // Note: The tasks runner is kept internally for backward compatibility
-// but should not be used directly. Use the plugin configuration instead.
+// But should not be used directly. Use the plugin configuration instead.

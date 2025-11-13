@@ -26,6 +26,8 @@ This will configure the plugin in your `nx.json` file using the official Nx plug
 
 > **Compatibility:** This plugin requires Nx version 20 or above and uses the official plugin API with `preTasksExecution` and `postTasksExecution` hooks. The deprecated `tasksRunnerOptions` configuration is no longer supported.
 
+> **Database Cache Support:** This plugin fully supports Nx 20+ database-driven cache system. It automatically syncs SQLite database files (`.db`, `.db-wal`, `.db-shm`) along with cache files to ensure proper cache lookup and storage across different machines and CI environments.
+
 ## Plugin settings
 
 There are two ways to set-up plugin options, using `nx.json` or `Environment variables`. Here is a list of all possible options:
@@ -65,6 +67,21 @@ There are two ways to set-up plugin options, using `nx.json` or `Environment var
 ```
 
 > **Note:** This plugin uses the official Nx plugin API introduced in Nx 20.4. The deprecated `tasksRunnerOptions` configuration is no longer supported. See [Nx Plugin Documentation](https://nx.dev/docs/extending-nx/intro) and [Deprecating Custom Tasks Runner](https://nx.dev/docs/reference/deprecated/custom-tasks-runner) for more information.
+
+## Database Cache (Nx 20+)
+
+Starting with Nx 20, Nx uses a database-driven cache system instead of file-based lookups. This plugin automatically handles both:
+
+- **Database files** (`.nx/workspace-data/{workspace-id}.db*`): Synced to `{s3-path}/workspace-data/` in S3
+- **Cache files** (`.nx/cache/{hash}/`): Synced to `{s3-path}/cache/` in S3
+
+The plugin syncs the database files before tasks run (in `preTasksExecution`) and uploads them after tasks complete (in `postTasksExecution`). This ensures that:
+
+1. The database is available for Nx to query cache entries
+2. Cache files can be retrieved based on database lookups
+3. The database stays synchronized across all machines and CI environments
+
+No additional configuration is required - the plugin automatically detects the workspace ID and handles database synchronization.
 
 > Environment variables can be set using `.env` file - check [dotenv documentation](https://www.npmjs.com/package/dotenv). Files are read in the following order:
 

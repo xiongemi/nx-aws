@@ -17,7 +17,10 @@ describe('init generator', () => {
 
   it('should add @nx-aws-plugin/nx-aws-cache to nx.json plugins array', async () => {
     let nxJson = readJson(appTree, 'nx.json');
-    expect(nxJson.tasksRunnerOptions.default.runner).toBe('nx/tasks-runners/default');
+    // TasksRunnerOptions may not exist in empty workspace, check if it exists first
+    if (nxJson.tasksRunnerOptions?.default) {
+      expect(nxJson.tasksRunnerOptions.default.runner).toBe('nx/tasks-runners/default');
+    }
 
     await generator(appTree, options);
 
@@ -52,7 +55,10 @@ describe('init generator', () => {
 
   it('should add @nx-aws-plugin/nx-aws-cache with no aws options to nx.json plugins array', async () => {
     let nxJson = readJson(appTree, 'nx.json');
-    expect(nxJson.tasksRunnerOptions.default.runner).toBe('nx/tasks-runners/default');
+    // TasksRunnerOptions may not exist in empty workspace, check if it exists first
+    if (nxJson.tasksRunnerOptions?.default) {
+      expect(nxJson.tasksRunnerOptions.default.runner).toBe('nx/tasks-runners/default');
+    }
 
     await generator(appTree, {});
 
