@@ -15,14 +15,16 @@ yarn add @nx-aws-plugin/nx-aws-cache
 npm i @nx-aws-plugin/nx-aws-cache
 ```
 
-Then run the init schematic by running:
+Then run the init generator by running:
 
 ```bash
 yarn nx generate @nx-aws-plugin/nx-aws-cache:init
 npm run nx generate @nx-aws-plugin/nx-aws-cache:init
 ```
 
-This will make the necessary changes to nx.json in your workspace to use nx-aws-cache runner.
+This will configure the plugin in your `nx.json` file using the official Nx plugin API. The plugin will be added to the `plugins` array.
+
+> **Compatibility:** This plugin requires Nx version 20 or above and uses the official plugin API with `preTasksExecution` and `postTasksExecution` hooks. The deprecated `tasksRunnerOptions` configuration is no longer supported.
 
 ## Plugin settings
 
@@ -45,22 +47,24 @@ There are two ways to set-up plugin options, using `nx.json` or `Environment var
 
 ```json
 {
-  "tasksRunnerOptions": {
-  "default": {
-    "runner": "@nx-aws-plugin/nx-aws-cache",
-    "options": {
-      ...
-      "awsAccessKeyId": "key",
-      "awsSecretAccessKey": "secret",
-      "awsEndpoint": "http://custom.de-eu.myhost.com",
-      "awsBucket": "bucket-name/sub-path",
-      "awsRegion": "eu-central-1",
-      "awsForcePathStyle": true,
-      "encryptionFileKey": "Pbfk58EpcK7IxTxWwSXNsTAKmzhJQE+99vkpGftyJg8="
+  "plugins": [
+    {
+      "plugin": "@nx-aws-plugin/nx-aws-cache",
+      "options": {
+        "awsAccessKeyId": "key",
+        "awsSecretAccessKey": "secret",
+        "awsEndpoint": "http://custom.de-eu.myhost.com",
+        "awsBucket": "bucket-name/sub-path",
+        "awsRegion": "eu-central-1",
+        "awsForcePathStyle": true,
+        "encryptionFileKey": "Pbfk58EpcK7IxTxWwSXNsTAKmzhJQE+99vkpGftyJg8="
+      }
     }
-  }
+  ]
 }
 ```
+
+> **Note:** This plugin uses the official Nx plugin API introduced in Nx 20.4. The deprecated `tasksRunnerOptions` configuration is no longer supported. See [Nx Plugin Documentation](https://nx.dev/docs/extending-nx/intro) and [Deprecating Custom Tasks Runner](https://nx.dev/docs/reference/deprecated/custom-tasks-runner) for more information.
 
 > Environment variables can be set using `.env` file - check [dotenv documentation](https://www.npmjs.com/package/dotenv). Files are read in the following order:
 

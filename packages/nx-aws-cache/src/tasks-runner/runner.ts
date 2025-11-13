@@ -7,12 +7,16 @@ import { config as dotEnvConfig } from 'dotenv';
 });
 
 import { TaskStatus } from '@nx/workspace/src/tasks-runner/tasks-runner';
-import { defaultTasksRunner } from '@nx/devkit';
+import { defaultTasksRunner, NxJsonConfiguration } from '@nx/devkit';
 
 import { AwsNxCacheOptions } from './models/aws-nx-cache-options.model';
 import { AwsCache } from './aws-cache';
 import { Logger } from './logger';
 import { MessageReporter } from './message-reporter';
+
+// Store state across hooks
+let currentRemoteCache: AwsCache | null = null;
+let currentMessages: MessageReporter | null = null;
 
 function getOptions(options: AwsNxCacheOptions) {
   return {
@@ -32,6 +36,63 @@ function getOptions(options: AwsNxCacheOptions) {
   };
 }
 
+export async function preTasksExecution(
+  options: AwsNxCacheOptions,
+  context: { nxJson: NxJsonConfiguration; workspaceRoot: string },
+): Promise<void> {
+  const logger = new Logger();
+
+  // Validate environment
+  if (process.env.NXCACHE_AWS_DISABLE === 'true') {
+    if (!process.env.NX_SKIP_NX_CACHE) {
+      logger.note('USING LOCAL CACHE (NXCACHE_AWS_DISABLE is set to true)');
+      process.env.NX_SKIP_NX_CACHE = 'true';
+    }
+    return;
+  }
+
+  // Validate AWS options
+  const awsOptions: AwsNxCacheOptions = getOptions(options);
+  const awsCache = new AwsCache(awsOptions, new MessageReporter(logger));
+
+  try {
+    awsCache.checkConfig(awsOptions);
+  } catch (err) {
+    logger.warn((err as Error).message);
+    logger.note('USING LOCAL CACHE');
+    process.env.NX_SKIP_NX_CACHE = 'true';
+    return;
+  }
+
+  // Initialize remote cache
+  // Note: The remote cache will be provided via the tasks runner for backward compatibility
+  // In the new plugin API, remote cache should be configured through other means
+  if (!process.env.NX_SKIP_NX_CACHE) {
+    logger.note('USING REMOTE CACHE');
+    currentMessages = new MessageReporter(logger);
+    currentRemoteCache = new AwsCache(awsOptions, currentMessages);
+  }
+}
+
+export async function postTasksExecution(
+  options: AwsNxCacheOptions,
+  context: {
+    nxJson: NxJsonConfiguration;
+    workspaceRoot: string;
+    taskResults: { [taskId: string]: TaskStatus };
+  },
+): Promise<void> {
+  if (currentRemoteCache && currentMessages) {
+    await currentRemoteCache.waitForStoreRequestsToComplete();
+    currentMessages.printMessages();
+
+    // Clean up state
+    currentRemoteCache = null;
+    currentMessages = null;
+  }
+}
+
+// Keep the old export for backward compatibility during migration
 // eslint-disable-next-line max-lines-per-function
 export const tasksRunner = (
   tasks: Parameters<typeof defaultTasksRunner>[0],

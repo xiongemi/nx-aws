@@ -23,8 +23,8 @@
   },
   "homepage": "https://github.com/bojanbass/nx-aws",
   "peerDependencies": {
-    "nx": ">=16.0.0",
-    "@nx/devkit": ">=16.0.0",
-    "@nx/workspace": ">=16.0.0"
+    "nx": ">=20.0.0",
+    "@nx/devkit": ">=20.0.0",
+    "@nx/workspace": ">=20.0.0"
   }
 }

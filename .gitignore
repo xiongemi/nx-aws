@@ -49,3 +49,7 @@ Thumbs.db
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+
+.nx/
+.cursor/rules/nx-rules.mdc
+.github/instructions/nx.instructions.md
