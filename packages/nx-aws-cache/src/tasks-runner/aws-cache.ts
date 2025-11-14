@@ -1,4 +1,3 @@
- 
 import { createReadStream, createWriteStream, writeFile, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { pipeline, Readable } from 'stream';
@@ -25,7 +24,10 @@ export class AwsCache implements RemoteCache {
   private workspaceRoot: string | null = null;
   private workspaceId: string | null = null;
 
-  public constructor(options: AwsNxCacheOptions, private messages: MessageReporter) {
+  public constructor(
+    options: AwsNxCacheOptions,
+    private messages: MessageReporter,
+  ) {
     const awsBucket = options.awsBucket ?? '';
     const bucketTokens = awsBucket.split('/');
     this.bucket = bucketTokens.shift() as string;
@@ -75,7 +77,6 @@ export class AwsCache implements RemoteCache {
     }
   }
 
-   
   public async retrieve(hash: string, cacheDirectory: string): Promise<boolean> {
     try {
       await this.s3.config.credentials();
@@ -410,9 +411,7 @@ export class AwsCache implements RemoteCache {
       params: {
         Bucket: this.bucket,
         Key: s3Key,
-        Body: this.encryptConfig
-          ? fileStream.pipe(new Encrypt(this.encryptConfig))
-          : fileStream,
+        Body: this.encryptConfig ? fileStream.pipe(new Encrypt(this.encryptConfig)) : fileStream,
       },
     });
 

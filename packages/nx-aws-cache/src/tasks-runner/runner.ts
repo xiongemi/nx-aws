@@ -7,7 +7,11 @@ import { config as dotEnvConfig } from 'dotenv';
 });
 
 import { TaskStatus } from '@nx/workspace/src/tasks-runner/tasks-runner';
-import { defaultTasksRunner, NxJsonConfiguration, workspaceRoot as nxWorkspaceRoot } from '@nx/devkit';
+import {
+  defaultTasksRunner,
+  NxJsonConfiguration,
+  workspaceRoot as nxWorkspaceRoot,
+} from '@nx/devkit';
 
 import { AwsNxCacheOptions } from './models/aws-nx-cache-options.model';
 import { AwsCache } from './aws-cache';
@@ -37,10 +41,7 @@ function getOptions(options: AwsNxCacheOptions) {
   };
 }
 
-function validateAndSetupCache(
-  options: AwsNxCacheOptions,
-  logger: Logger,
-): AwsCache | null {
+function validateAndSetupCache(options: AwsNxCacheOptions, logger: Logger): AwsCache | null {
   const awsOptions: AwsNxCacheOptions = getOptions(options);
   const awsCache = new AwsCache(awsOptions, new MessageReporter(logger));
 
@@ -139,10 +140,7 @@ export async function postTasksExecution(
   }
 }
 
-function setupWorkspaceContextForRunner(
-  remoteCache: AwsCache,
-  logger: Logger,
-): void {
+function setupWorkspaceContextForRunner(remoteCache: AwsCache, logger: Logger): void {
   const rootPath = nxWorkspaceRoot;
   try {
     const workspaceId = getWorkspaceId(rootPath);
@@ -170,7 +168,7 @@ async function finalizeCacheOperations(
 }
 
 // Keep the old export for backward compatibility during migration
- 
+
 export const tasksRunner = (
   tasks: Parameters<typeof defaultTasksRunner>[0],
   options: Parameters<typeof defaultTasksRunner>[1] & AwsNxCacheOptions,

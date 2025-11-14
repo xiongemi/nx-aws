@@ -89,10 +89,9 @@ export function getPackageManagerCommand({
 export function detectPackageManager(dir = ''): 'npm' | 'yarn' | 'pnpm' {
   return existsSync(join(dir, 'yarn.lock'))
     ? 'yarn'
-    : existsSync(join(dir, 'pnpm-lock.yaml')) ||
-      existsSync(join(dir, 'pnpm-workspace.yaml'))
-    ? 'pnpm'
-    : 'npm';
+    : existsSync(join(dir, 'pnpm-lock.yaml')) || existsSync(join(dir, 'pnpm-workspace.yaml'))
+      ? 'pnpm'
+      : 'npm';
 }
 
 export function runCLI(
@@ -125,9 +124,8 @@ export function runCLI(
   } catch (e: any) {
     if (opts.silenceError) {
       return stripConsoleColors(e.stdout + e.stderr);
-    } 
-      logError(`Original command: ${command}`, `${e.stdout}\n\n${e.stderr}`);
-      throw e;
-    
+    }
+    logError(`Original command: ${command}`, `${e.stdout}\n\n${e.stderr}`);
+    throw e;
   }
 }

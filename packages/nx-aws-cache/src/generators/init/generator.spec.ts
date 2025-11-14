@@ -32,7 +32,6 @@ function findPluginInNxJson(nxJson: { plugins?: Array<unknown> }): unknown {
   );
 }
 
- 
 describe('init generator', () => {
   let appTree: Tree;
   const options: InitGeneratorSchema = {

@@ -1,38 +1,22 @@
 import { parseJson } from '@nx/devkit';
-import {
-  createFileSync,
-  ensureDirSync,
-  readdirSync,
-  readFileSync,
-  removeSync,
-  renameSync,
-  statSync,
-  writeFileSync,
-} from 'fs-extra';
-import * as path from 'path';
-import { join } from 'path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { tmpProjPath } from './create-project-utils';
 
 export function createFile(f: string, content = ''): void {
   const p = tmpProjPath(f);
-  createFileSync(p);
+  writeFileSync(p, '');
   if (content) {
     updateFile(f, content);
   }
 }
 
-export function updateFile(
-  f: string,
-  content: string | ((content: string) => string),
-): void {
-  ensureDirSync(path.dirname(tmpProjPath(f)));
+export function updateFile(f: string, content: string | ((content: string) => string)): void {
+  mkdirSync(dirname(tmpProjPath(f)), { recursive: true });
   if (typeof content === 'string') {
     writeFileSync(tmpProjPath(f), content);
   } else {
-    writeFileSync(
-      tmpProjPath(f),
-      content(readFileSync(tmpProjPath(f)).toString()),
-    );
+    writeFileSync(tmpProjPath(f), content(readFileSync(tmpProjPath(f)).toString()));
   }
 }
 

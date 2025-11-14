@@ -66,6 +66,8 @@ export function getWorkspaceId(workspaceRootPath: string = nxWorkspaceRoot): str
  * @param workspaceRootPath - The root path of the workspace
  * @returns The path to .nx/workspace-data/
  */
-export function getWorkspaceDataPath(workspaceRootPath: string | undefined = nxWorkspaceRoot): string {
+export function getWorkspaceDataPath(
+  workspaceRootPath: string | undefined = nxWorkspaceRoot,
+): string {
   return join(workspaceRootPath, '.nx', 'workspace-data');
 }

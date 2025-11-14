@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { readJsonFile } from '@nx/devkit';
 import { getPackageManagerCommand, runCLI, RunCmdOpts } from './command-utils';
 import { logError, logInfo } from './log-utils';
 
@@ -49,7 +50,8 @@ export function newProject({ name = uniq('proj') } = {}): string {
     const packageInstallStart = performance.mark('packageInstall:start');
     const pkgJsonPath = join(projectDirectory, 'package.json');
     const pkgJson = readJsonFile(pkgJsonPath);
-    pkgJson.devDependencies['@nx-aws-plugin/nx-aws-cache'] = 'file:../../../dist/packages/nx-aws-cache';
+    pkgJson.devDependencies['@nx-aws-plugin/nx-aws-cache'] =
+      'file:../../../dist/packages/nx-aws-cache';
     writeFileSync(pkgJsonPath, JSON.stringify(pkgJson, null, 2));
     execSync(pm.install, {
       cwd: projectDirectory,
@@ -73,17 +75,11 @@ export function newProject({ name = uniq('proj') } = {}): string {
     projName = name;
 
     const newProjectEnd = performance.mark('new-project:end');
-    const perfMeasure = performance.measure(
-      'newProject',
-      newProjectStart.name,
-      newProjectEnd.name,
-    );
+    const perfMeasure = performance.measure('newProject', newProjectStart.name, newProjectEnd.name);
 
     logInfo(
       'NX',
-      `E2E created a project: ${projectDirectory} in ${
-        perfMeasure.duration / 1000
-      } seconds
+      `E2E created a project: ${projectDirectory} in ${perfMeasure.duration / 1000} seconds
 create-nx-workspace: ${createNxWorkspaceMeasure.duration / 1000} seconds
 packageInstall: ${packageInstallMeasure.duration / 1000} seconds`,
     );
@@ -95,10 +91,7 @@ packageInstall: ${packageInstallMeasure.duration / 1000} seconds`,
   }
 }
 
-export function cleanupProject({
-  skipReset,
-  ...opts
-}: RunCmdOpts & { skipReset?: boolean } = {}) {
+export function cleanupProject({ skipReset, ...opts }: RunCmdOpts & { skipReset?: boolean } = {}) {
   try {
     if (!skipReset) {
       runCLI('reset', opts);

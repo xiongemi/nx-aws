@@ -7,11 +7,9 @@ export function stripConsoleColors(logs: string): string {
 }
 
 export function logError(title: string, body: string) {
-   
   console.error(title, body);
 }
 
 export function logInfo(title: string, body: string) {
-   
   console.log(title, body);
 }

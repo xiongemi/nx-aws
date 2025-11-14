@@ -3,12 +3,16 @@ import * as os from 'os';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
 import { mockClient } from 'aws-sdk-client-mock';
-import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { AwsCache } from './aws-cache';
 import { Logger } from './logger';
 import { MessageReporter } from './message-reporter';
 
- 
 describe('Test aws put and get unencrypted file', () => {
   let awsCache: AwsCache;
   const s3Mock = mockClient(S3Client);
@@ -60,7 +64,10 @@ describe('Test aws put and get unencrypted file', () => {
     // Short-circuit S3 interactions and focus on cache logic:
     // Pretend the cache exists and simply copy the tgz file when downloadFile is called.
     jest
-      .spyOn(awsCache as unknown as { checkIfCacheExists(hash: string): Promise<boolean> }, 'checkIfCacheExists')
+      .spyOn(
+        awsCache as unknown as { checkIfCacheExists(hash: string): Promise<boolean> },
+        'checkIfCacheExists',
+      )
       .mockResolvedValue(true);
     jest
       .spyOn(
@@ -94,7 +101,10 @@ describe('Test aws put and get unencrypted file', () => {
     expect(fs.existsSync(tgzFilePath)).toBeTruthy();
 
     jest
-      .spyOn(awsCache as unknown as { checkIfCacheExists(hash: string): Promise<boolean> }, 'checkIfCacheExists')
+      .spyOn(
+        awsCache as unknown as { checkIfCacheExists(hash: string): Promise<boolean> },
+        'checkIfCacheExists',
+      )
       .mockResolvedValue(true);
     jest
       .spyOn(
@@ -115,7 +125,6 @@ describe('Test aws put and get unencrypted file', () => {
   });
 });
 
- 
 describe('Test database file syncing', () => {
   let awsCache: AwsCache;
   const s3Mock = mockClient(S3Client);

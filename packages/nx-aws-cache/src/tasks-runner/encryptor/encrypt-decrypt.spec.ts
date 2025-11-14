@@ -10,8 +10,11 @@ const ivLength = 16;
 const algo = 'aes-256-cbc';
 
 class TestCipher {
-   
-  constructor(private algorithm: string, private key: Buffer, private iv: Buffer) {}
+  constructor(
+    private algorithm: string,
+    private key: Buffer,
+    private iv: Buffer,
+  ) {}
 
   encrypt(data: Buffer): Buffer {
     const cipher = createCipheriv(
@@ -20,10 +23,7 @@ class TestCipher {
       this.iv as unknown as Uint8Array,
     );
     const encrypted = cipher.update(data as unknown as Uint8Array);
-    return Buffer.concat([
-      encrypted as unknown as Buffer,
-      cipher.final() as unknown as Buffer,
-    ]);
+    return Buffer.concat([encrypted as unknown as Buffer, cipher.final() as unknown as Buffer]);
   }
 
   decrypt(encryptedData: Buffer): Buffer {
@@ -33,14 +33,10 @@ class TestCipher {
       this.iv as unknown as Uint8Array,
     );
     const decrypted = decipher.update(encryptedData);
-    return Buffer.concat([
-      decrypted as unknown as Buffer,
-      decipher.final() as unknown as Buffer,
-    ]);
+    return Buffer.concat([decrypted as unknown as Buffer, decipher.final() as unknown as Buffer]);
   }
 }
 
- 
 describe('Encryptor tests', () => {
   let testData: Buffer;
   let encrypt: Encrypt;
@@ -51,7 +47,7 @@ describe('Encryptor tests', () => {
 
   beforeEach(() => {
     const config = new EncryptConfig(key.toString('base64'), algo, ivLength);
-     
+
     testData = Buffer.from(
       "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum",
     );
@@ -78,7 +74,9 @@ describe('Encryptor tests', () => {
       expect(ivFromFirstBytes.equals(iv as unknown as Buffer)).toBeTruthy();
       // Ensure we have some encrypted payload and that it round-trips
       expect(encryptedPayload.length).toBeGreaterThan(0);
-      expect(testCipher.decrypt(encryptedPayload).equals(testData as unknown as Buffer)).toBeTruthy();
+      expect(
+        testCipher.decrypt(encryptedPayload).equals(testData as unknown as Buffer),
+      ).toBeTruthy();
       done();
     });
   });

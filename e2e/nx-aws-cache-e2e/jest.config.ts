@@ -1,4 +1,3 @@
- 
 export default {
   displayName: 'nx-aws-cache-e2e',
   preset: '../../jest.preset.js',

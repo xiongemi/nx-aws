@@ -139,7 +139,6 @@ function updateNxJson(tree: Tree, options: InitGeneratorSchema): void {
   });
 }
 
- 
 export default async function (tree: Tree, options: InitGeneratorSchema) {
   if (!isCompatibleVersion()) {
     throw new Error(
