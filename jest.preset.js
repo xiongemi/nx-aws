@@ -1,3 +1,15 @@
-const nxPreset = require('@nx/jest/preset').default;
+// Ensure that the preset loads from node_modules rather than our local typescript source
+const nxPreset = require('./node_modules/@nx/jest/preset').default;
 
-module.exports = { ...nxPreset };
+module.exports = {
+  ...nxPreset,
+  testTimeout: 35000,
+  testMatch: ['**/+(*.)+(spec|test).+(ts|js)?(x)'],
+  transform: {
+    '^.+\\.(ts|js|html)$': 'ts-jest',
+  },
+  moduleFileExtensions: ['ts', 'js', 'html'],
+  coverageReporters: ['html'],
+  maxWorkers: 1,
+  testEnvironment: 'node'
+};

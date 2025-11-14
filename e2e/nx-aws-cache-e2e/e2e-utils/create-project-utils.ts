@@ -32,13 +32,16 @@ export function newProject({ name = uniq('proj') } = {}): string {
     // Create a minimal Nx workspace using the local CLI
     const createWorkspaceStart = performance.mark('create-nx-workspace:start');
     const pm = getPackageManagerCommand({ path: projectDirectory });
-    execSync(
-      `${pm.exec} create-nx-workspace@latest ${projScope} --preset=ts --no-nxCloud --packageManager=npm --nxWorkspaceRoot=${projectDirectory}`,
-      {
-        cwd: projectDirectory,
-        stdio: 'inherit',
+    const command = `${pm.exec} --yes create-nx-workspace@latest ${projScope} --preset=ts --nxCloud=skip --packageManager=npm --no-interactive --verbose`;
+    execSync(command, {
+      cwd: projectDirectory,
+      stdio: 'inherit',
+      env: {
+        CI: 'true',
+        NX_VERBOSE_LOGGING: 'true',
       },
-    );
+      encoding: 'utf-8',
+    });
     const createWorkspaceEnd = performance.mark('create-nx-workspace:end');
     const createNxWorkspaceMeasure = performance.measure(
       'create-nx-workspace',
@@ -86,7 +89,7 @@ packageInstall: ${packageInstallMeasure.duration / 1000} seconds`,
 
     return projScope;
   } catch (e: any) {
-    logError(`Failed to set up project for e2e tests.`, e.message ?? String(e));
+    logError(`Failed to set up project for e2e tests.`, e.stack ?? e.message ?? String(e));
     throw e;
   }
 }
