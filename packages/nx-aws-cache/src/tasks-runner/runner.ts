@@ -170,7 +170,7 @@ async function finalizeCacheOperations(
 }
 
 // Keep the old export for backward compatibility during migration
-// eslint-disable-next-line max-lines-per-function
+ 
 export const tasksRunner = (
   tasks: Parameters<typeof defaultTasksRunner>[0],
   options: Parameters<typeof defaultTasksRunner>[1] & AwsNxCacheOptions,

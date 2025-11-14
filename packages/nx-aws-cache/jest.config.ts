@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 export default {
   displayName: 'nx-aws-cache',
   preset: '../../jest.preset.js',

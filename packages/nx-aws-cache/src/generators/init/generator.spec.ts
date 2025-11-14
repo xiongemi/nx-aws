@@ -32,7 +32,7 @@ function findPluginInNxJson(nxJson: { plugins?: Array<unknown> }): unknown {
   );
 }
 
-// eslint-disable-next-line max-lines-per-function
+ 
 describe('init generator', () => {
   let appTree: Tree;
   const options: InitGeneratorSchema = {

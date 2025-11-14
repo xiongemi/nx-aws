@@ -139,7 +139,7 @@ function updateNxJson(tree: Tree, options: InitGeneratorSchema): void {
   });
 }
 
-// eslint-disable-next-line func-names
+ 
 export default async function (tree: Tree, options: InitGeneratorSchema) {
   if (!isCompatibleVersion()) {
     throw new Error(

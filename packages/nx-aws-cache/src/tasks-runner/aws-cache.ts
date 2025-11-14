@@ -1,4 +1,4 @@
-/* eslint-disable max-lines */
+ 
 import { createReadStream, createWriteStream, writeFile, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { pipeline, Readable } from 'stream';
@@ -75,7 +75,7 @@ export class AwsCache implements RemoteCache {
     }
   }
 
-  // eslint-disable-next-line max-statements
+   
   public async retrieve(hash: string, cacheDirectory: string): Promise<boolean> {
     try {
       await this.s3.config.credentials();
